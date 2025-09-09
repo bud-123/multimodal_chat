@@ -24,13 +24,27 @@ import openai
 from dotenv import load_dotenv
 from PIL import Image
 
-# Try to import TTS, but don't fail if it's not available
+# Try to import TTS libraries with coqui-tts priority
+TTS_AVAILABLE = False
+TTS_LIBRARY = None
+
 try:
+    # Try coqui-tts (modern package for Python 3.12)
     from TTS.api import TTS  # type: ignore
     TTS_AVAILABLE = True
+    TTS_LIBRARY = "coqui-tts"
+    print("✅ Using coqui-tts library")
 except ImportError:
-    TTS_AVAILABLE = False
-    print("⚠️ TTS not available - speech output will be text-only")
+    try:
+        # Fallback to pyttsx3 for basic TTS
+        import pyttsx3  # type: ignore
+        TTS_AVAILABLE = True
+        TTS_LIBRARY = "pyttsx3"
+        print("✅ Using pyttsx3 fallback")
+    except ImportError:
+        TTS_AVAILABLE = False
+        TTS_LIBRARY = None
+        print("⚠️ No TTS library available - speech output will be text-only")
 
 # Load environment variables
 load_dotenv()
@@ -185,7 +199,7 @@ class MultimodalChat:
         try:
             with self.microphone as source:
                 # Listen for audio with timeout
-                audio = self.recognizer.listen(source, timeout=5, phrase_time_limit=10)
+                audio = self.recognizer.listen(source, timeout=10, phrase_time_limit=20)
             
             print("🔄 Processing speech...")
             text = self.recognizer.recognize_google(audio)
@@ -400,9 +414,14 @@ class MultimodalChat:
                 elif key == ord('v'):
                     self.process_voice_input()
                 elif key == ord('c'):
-                    text_query = input("\n📝 What would you like to know about what you see? ")
-                    if text_query.strip():
+                    print("\n🎤📷 Speak your question, then image will be captured...")
+                    # Listen for voice input first
+                    text_query = self.listen_for_voice()
+                    if text_query and text_query.strip():
+                        print("📷 Now capturing image...")
                         self.process_vision_input(text_query)
+                    else:
+                        print("❌ No voice input detected, please try again")
                 elif key == ord('s'):  # New: voice + camera
                     print("\n🎤📷 Voice input with camera capture...")
                     self.process_voice_with_vision()
