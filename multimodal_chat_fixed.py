@@ -20,10 +20,17 @@ import speech_recognition as sr
 import pygame
 from pydub import AudioSegment
 from pydub.playback import play
-from TTS.api import TTS
 import openai
 from dotenv import load_dotenv
 from PIL import Image
+
+# Try to import TTS, but don't fail if it's not available
+try:
+    from TTS.api import TTS  # type: ignore
+    TTS_AVAILABLE = True
+except ImportError:
+    TTS_AVAILABLE = False
+    print("⚠️ TTS not available - speech output will be text-only")
 
 # Load environment variables
 load_dotenv()
@@ -63,6 +70,12 @@ class MultimodalChat:
     
     def setup_tts(self):
         """Setup Text-to-Speech with better error handling."""
+        if not TTS_AVAILABLE:
+            print("⚠️ TTS not available - speech output disabled")
+            self.tts = None
+            self.tts_model_name = None
+            return
+            
         try:
             # Try different TTS models for better quality
             models_to_try = [
