@@ -1,83 +1,100 @@
-echo "🎥 Setting up Multimodal Webcam + Voice Chat..."
+#!/bin/bash
 
-# Check OpenAI API key
-if [ -z "$OPENAI_API_KEY" ]; then
-    echo "❌ Please set OPENAI_API_KEY environment variable"
-    exit 1
-fi
+echo "🔧 Setting up Multimodal AI Chat with fixed dependencies..."
 
-# Detect OS and install camera dependencies
-if [[ "$OSTYPE" == "linux-gnu"* ]]; then
-    echo "📦 Installing Linux dependencies..."
-    sudo apt-get update
-    sudo apt-get install -y \
-        python3-opencv \
-        libopencv-dev \
-        v4l-utils \
-        cheese \
-        portaudio19-dev \
-        ffmpeg \
-        libsndfile1 \
-        build-essential
-        
-elif [[ "$OSTYPE" == "darwin"* ]]; then
-    echo "📦 Installing macOS dependencies..."
-    brew install opencv portaudio ffmpeg libsndfile
-fi
-
-# Create/activate virtual environment
+# Create virtual environment if it doesn't exist
 if [ ! -d "venv-multimodal" ]; then
+    echo "🔄 Creating virtual environment..."
     python3 -m venv venv-multimodal
 fi
 
+# Activate virtual environment
 source venv-multimodal/bin/activate
+echo "✅ Activated virtual environment"
 
-# Install Python packages
-echo "📦 Installing Python packages..."
-pip install --upgrade pip
+# Upgrade pip and setuptools first
+echo "⬆️ Upgrading pip and setuptools..."
+pip install --upgrade pip setuptools wheel
 
-# Install PyTorch (GPU if available)
-if command -v nvidia-smi &> /dev/null; then
-    echo "🚀 Installing PyTorch with CUDA..."
-    pip install torch==2.0.1+cu118 torchaudio==2.0.2+cu118 --index-url https://download.pytorch.org/whl/cu118
+# Completely clean up problematic packages
+echo "🗑️ Removing ALL potentially conflicting packages..."
+pip uninstall -y openai httpx httpcore h11 anyio sniffio certifi urllib3
+
+# Install HTTP dependencies in specific order with exact compatible versions
+echo "🔗 Installing HTTP stack with compatible versions..."
+pip install "certifi>=2023.7.22"
+pip install "sniffio>=1.3.0"
+pip install "anyio>=3.7.1,<5.0.0"
+pip install "h11>=0.14.0,<1.0.0"
+pip install "httpcore>=0.18.0,<1.0.0"
+pip install "httpx>=0.24.1,<0.26.0"
+
+# Install compatible OpenAI version
+echo "🤖 Installing compatible OpenAI client..."
+pip install "openai>=1.3.0,<2.0.0"
+
+# Install multimedia packages
+echo "🎵 Installing multimedia packages..."
+pip install pygame soundfile librosa pydub
+
+# Install remaining requirements
+echo "📋 Installing remaining requirements..."
+pip install -r requirements-multimodal.txt --force-reinstall
+
+# Test installations
+echo "🧪 Testing critical imports..."
+python3 -c "
+import sys
+print(f'Python version: {sys.version}')
+
+# Test OpenAI
+try:
+    import openai
+    print(f'✅ OpenAI import successful - version: {openai.__version__}')
+    
+    # Test client creation with compatible syntax
+    client = openai.OpenAI(api_key='test-key')
+    print('✅ OpenAI client creation works')
+    
+except Exception as e:
+    print(f'❌ OpenAI error: {e}')
+    sys.exit(1)
+
+# Test other critical imports
+try:
+    import cv2
+    print('✅ OpenCV import successful')
+except ImportError:
+    print('❌ OpenCV import failed')
+
+try:
+    import pygame
+    print('✅ Pygame import successful')
+except ImportError:
+    print('❌ Pygame import failed')
+
+try:
+    from TTS.api import TTS
+    print('✅ TTS import successful')
+except ImportError as e:
+    print(f'⚠️ TTS import failed: {e}')
+
+try:
+    import speech_recognition as sr
+    print('✅ Speech Recognition import successful')
+except ImportError:
+    print('❌ Speech Recognition import failed')
+"
+
+if [ $? -eq 0 ]; then
+    echo ""
+    echo "🎉 Setup completed successfully!"
+    echo ""
+    echo "To run the application:"
+    echo "1. Make sure your .env file contains your OPENAI_API_KEY"
+    echo "2. Run: python multimodal_chat.py"
+    echo ""
 else
-    echo "💻 Installing PyTorch CPU..."
-    pip install torch torchaudio
+    echo ""
+    echo "❌ Setup encountered errors. Please check the output above."
 fi
-
-# Install other dependencies
-pip install \
-    opencv-python \
-    opencv-python-headless \
-    pillow \
-    numpy \
-    openai \
-    pyaudio \
-    speechrecognition \
-    pydub \
-    TTS \
-    requests \
-    python-dotenv
-
-# Test camera
-echo "📷 Testing camera access..."
-python3 -c "
-import cv2
-camera = cv2.VideoCapture(0)
-if camera.isOpened():
-    print('✅ Camera working!')
-    camera.release()
-else:
-    print('❌ Camera not accessible')
-    print('Try: sudo usermod -a -G video \$USER')
-    print('Then logout and login again')
-"
-
-# Download TTS model
-echo "📥 Pre-downloading TTS model..."
-python3 -c "
-from TTS.api import TTS
-print('Downloading TTS model...')
-tts = TTS(model_name='tts_models/en/ljspeech/glow-tts')
-print('✅ TTS ready!')
-"
